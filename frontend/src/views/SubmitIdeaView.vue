@@ -51,12 +51,7 @@ import '@kangc/v-md-editor/lib/style/base-editor.css';
 import vuepressTheme from '@kangc/v-md-editor/lib/theme/vuepress.js';
 import '@kangc/v-md-editor/lib/theme/style/vuepress.css';
 import zhCN from '@kangc/v-md-editor/lib/lang/zh-CN';
-VMdEditor.use(vuepressTheme, {
-  // 在这里将我们的上传函数注册到主题中
-  uploadImage: {
-    upload: handleEditorImageUpload,
-  },
-});
+VMdEditor.use(vuepressTheme, {});
 VMdEditor.lang.use('zh-CN', zhCN);
 
 // --- 核心逻辑 ---
