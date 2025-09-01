@@ -42,18 +42,18 @@
 </template>
 
 <script setup>
-// frontend/src/views/SubmitIdeaView.vue 的 <script setup> (md-editor-v3 版本)
+// frontend/src/views/SubmitIdeaView.vue 的 <script setup> (最终图片注释版)
 
 import { ref, onMounted, watch } from 'vue';
 import apiClient from '@/services/api.js';
 import { useRouter } from 'vue-router';
 
-// 1. 导入新的 md-editor-v3 编辑器和它的样式
+// 导入 md-editor-v3 编辑器和它的样式
 import { MdEditor } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
 
 
-// --- 核心逻辑 (大部分保持不变) ---
+// --- 核心逻辑 ---
 const router = useRouter();
 const title = ref('');
 const content = ref('');
@@ -61,34 +61,49 @@ const uploadedImageFilename = ref(null);
 let debounceTimer = null;
 
 
-// 2. 【关键】为 md-editor-v3 重写图片上传函数
+// --- 【关键】为 md-editor-v3 升级后的、带注释功能的图片上传函数 ---
 const handleEditorImageUploadV3 = async (files, callback) => {
+  // 我们先处理单张图片上传
   if (files.length === 0) {
     return;
   }
+  const file = files[0];
+  const formData = new FormData();
+  formData.append('file', file);
 
-  // 使用 Promise.all 来处理可能的多图片上传
-  const results = await Promise.all(
-    Array.from(files).map(async (file) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const response = await apiClient.post('/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        // 返回后端提供的完整图片 URL
-        return `http://localhost:5000/uploads/${response.data.filename}`;
-      } catch (error) {
-        console.error("图片上传失败:", error);
-        // 返回一个空字符串或错误提示，表示此图片上传失败
-        return null;
-      }
-    })
-  )
+  try {
+    console.log("正在上传图片...");
+    const response = await apiClient.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
 
-  // 过滤掉上传失败的结果，然后调用回调函数将图片URL插入编辑器
-  callback(results.filter(url => url !== null));
+    const realUrl = `/uploads/${response.data.filename}`; // 使用相对路径
+    console.log("图片上传成功，URL:", realUrl);
+
+    // 1. 弹出输入框，让用户输入注释
+    const desc = prompt("请输入图片的注释（将显示在图片下方）：", file.name);
+
+    // 2. 如果用户点击了“取消”，则不进行任何操作
+    if (desc === null) {
+      return;
+    }
+
+    // 3. 构建包含图片和注释的 HTML 代码块
+    //    我们使用内联样式(style)来确保无论在哪里显示，样式都保持一致
+    const imageHtml = `
+<figure style="text-align: center; margin: 1.5em 0;">
+  <img src="${realUrl}" alt="${desc}" style="max-width: 90%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+  <figcaption style="font-size: 0.9em; color: #666; margin-top: 8px; font-style: italic;">${desc}</figcaption>
+</figure>
+`;
+    
+    // 4. 调用编辑器的回调函数，将我们构建好的 HTML 插入到编辑器中
+    callback([imageHtml]);
+
+  } catch (error) {
+    console.error("图片上传失败:", error);
+    alert('图片上传失败，请重试。');
+  }
 };
 
 
