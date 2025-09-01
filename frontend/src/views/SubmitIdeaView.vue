@@ -27,12 +27,13 @@
       
       <div class="form-group">
         <label>详细内容 (支持 Markdown)</label>
-        <v-md-editor 
-        v-model="content" 
-        height="500px"
-        :upload-image="handleEditorImageUpload"
-        placeholder="在这里详细描述您的创意..."
-        ></v-md-editor>
+        <md-editor 
+          v-model="content" 
+          language="zh-CN"
+          :onUploadImg="handleEditorImageUploadV3"
+          placeholder="在这里详细描述您的创意..."
+          style="height: 500px;"
+        />
       </div>
 
       <button type="submit">提交创意</button>
@@ -41,87 +42,86 @@
 </template>
 
 <script setup>
+// frontend/src/views/SubmitIdeaView.vue 的 <script setup> (md-editor-v3 版本)
+
 import { ref, onMounted, watch } from 'vue';
 import apiClient from '@/services/api.js';
 import { useRouter } from 'vue-router';
 
-// --- Markdown 编辑器配置 (中文版) ---
-import VMdEditor from '@kangc/v-md-editor';
-import '@kangc/v-md-editor/lib/style/base-editor.css';
-import vuepressTheme from '@kangc/v-md-editor/lib/theme/vuepress.js';
-import '@kangc/v-md-editor/lib/theme/style/vuepress.css';
-import zhCN from '@kangc/v-md-editor/lib/lang/zh-CN';
-VMdEditor.use(vuepressTheme, {});
-VMdEditor.lang.use('zh-CN', zhCN);
+// 1. 导入新的 md-editor-v3 编辑器和它的样式
+import { MdEditor } from 'md-editor-v3';
+import 'md-editor-v3/lib/style.css';
 
-// --- 核心逻辑 ---
+
+// --- 核心逻辑 (大部分保持不变) ---
 const router = useRouter();
 const title = ref('');
 const content = ref('');
 const uploadedImageFilename = ref(null);
-
-// 1. 新增：用于“防抖”的变量
 let debounceTimer = null;
 
-// --- 云端草稿逻辑 ---
+
+// 2. 【关键】为 md-editor-v3 重写图片上传函数
+const handleEditorImageUploadV3 = async (files, callback) => {
+  if (files.length === 0) {
+    return;
+  }
+
+  // 使用 Promise.all 来处理可能的多图片上传
+  const results = await Promise.all(
+    Array.from(files).map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        // 返回后端提供的完整图片 URL
+        return `http://localhost:5000/uploads/${response.data.filename}`;
+      } catch (error) {
+        console.error("图片上传失败:", error);
+        // 返回一个空字符串或错误提示，表示此图片上传失败
+        return null;
+      }
+    })
+  )
+
+  // 过滤掉上传失败的结果，然后调用回调函数将图片URL插入编辑器
+  callback(results.filter(url => url !== null));
+};
+
+
+// --- 云端草稿逻辑 (保持不变) ---
 async function fetchDraft() {
   try {
     const response = await apiClient.get('/draft');
-    // 增加一个更严格的检查，确保草稿有内容
     if (response.data && (response.data.title || response.data.content)) {
-      console.log("从云端恢复草稿:", response.data);
-      // 在恢复前，弹窗询问用户
       if (confirm('检测到您有云端草稿，是否需要恢复？')) {
-          title.value = response.data.title || '';
-          content.value = response.data.content || '';
+        title.value = response.data.title || '';
+        content.value = response.data.content || '';
       }
-    } else {
-      console.log("云端没有草稿。");
     }
   } catch (error) {
     console.error("获取云端草稿失败:", error);
-    // 如果是因为未登录(401)，则不需要打扰用户
-    if (error.response && error.response.status === 401) {
-      console.log("用户未登录，无法获取草稿。");
-    } else {
-      // 对于其他错误（比如网络问题），明确地提示用户
-      alert('获取云端草稿失败！请检查您的网络连接和浏览器控制台的错误信息。');
+    if (error.response && error.response.status !== 401) {
+      alert('获取云端草稿失败！请检查网络连接。');
     }
   }
 }
-
-// 页面加载时，尝试从云端获取草稿
-onMounted(() => {
-  fetchDraft();
-});
-
-// 2. 改造：使用“防抖”技术来智能地自动保存
+onMounted(fetchDraft);
 watch([title, content], () => {
-  // 先清除上一次的计时器
   clearTimeout(debounceTimer);
-  
-  // 设置一个新的计时器，在2秒后执行保存操作
-  debounceTimer = setTimeout(() => {
-    saveDraft();
-  }, 2000); // 2000毫秒 = 2秒
+  debounceTimer = setTimeout(saveDraft, 2000);
 });
-
-// 3. 新增：保存草稿到云端的函数
 async function saveDraft() {
-  console.log('正在保存草稿到云端...');
   try {
-    await apiClient.post('/draft', {
-      title: title.value,
-      content: content.value
-    });
+    await apiClient.post('/draft', { title: title.value, content: content.value });
     console.log('草稿已成功保存到云端！');
-    // 这里可以给用户一个不打扰的、“已保存”的提示
   } catch (error) {
     console.error("保存草稿到云端失败:", error);
   }
 }
-
-// 4. 新增：提交成功后，删除云端草稿的函数
 async function deleteDraft() {
   try {
     await apiClient.delete('/draft');
@@ -131,97 +131,48 @@ async function deleteDraft() {
   }
 }
 
-// --- 文件导入与图片上传逻辑 (保持不变) ---
+
+// --- 封面图片和文件导入逻辑 (保持不变) ---
 function handleFileImport(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
-    content.value = e.target.result;
-  };
+  reader.onload = (e) => { content.value = e.target.result; };
   reader.readAsText(file);
   event.target.value = '';
 }
-
 async function handleImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   const formData = new FormData();
   formData.append('file', file);
   try {
-    const response = await apiClient.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    const response = await apiClient.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
     uploadedImageFilename.value = response.data.filename;
-    alert('图片上传成功！');
+    alert('封面图片上传成功！');
   } catch (error) {
-    alert('图片上传失败，请重试。');
+    alert('封面图片上传失败，请重试。');
     console.error(error);
   }
 }
 
-// --- 新增：处理 Markdown 编辑器内部图片上传的函数 ---
-async function handleEditorImageUpload(event, insertImage, files) {
-  // event: 原生事件
-  // insertImage: 编辑器提供的一个函数，用来插入图片
-  // files: 用户选择的文件列表
 
-  if (files.length === 0) return;
-
-  const file = files[0];
-  const formData = new FormData();
-  formData.append('file', file);
-
-  console.log("编辑器正在上传图片...");
-
-  try {
-    // 调用我们现有的/upload接口
-    const response = await apiClient.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    
-    // 从后端获取上传成功后的文件名
-    const filename = response.data.filename;
-    
-    // 使用 insertImage 函数将图片插入到编辑器中
-    // 我们需要构建完整的图片URL
-    insertImage({
-      url: `http://localhost:5000/uploads/${filename}`,
-      desc: '图片描述', // 您可以自定义默认的图片描述
-      // width: 'auto',
-      // height: 'auto',
-    });
-    console.log("编辑器图片上传成功！");
-
-  } catch (error) {
-    alert('编辑器内图片上传失败，请重试。');
-    console.error("编辑器图片上传失败:", error);
-  }
-}
-
-// --- 表单提交逻辑 (改造) ---
+// --- 表单提交逻辑 (保持不变) ---
 async function submitIdea() {
   if (!title.value || !content.value) {
     alert('标题和内容都不能为空！');
     return;
   }
-  
   const formData = new FormData();
   formData.append('title', title.value);
   formData.append('content', content.value);
   if (uploadedImageFilename.value) {
     formData.append('image_filename', uploadedImageFilename.value);
   }
-
   try {
-    const response = await apiClient.post('/ideas', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    const response = await apiClient.post('/ideas', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
     alert(response.data.message);
-    
-    // 5. 提交成功后，调用删除云端草稿的函数
     await deleteDraft();
-
     router.push('/ideas');
   } catch (error) {
     if (error.response && error.response.status === 401) {
@@ -237,7 +188,6 @@ async function submitIdea() {
 </script>
 
 <style scoped>
-/* 样式部分保持不变 */
 .file-import {
   background-color: #f0f7ff;
   border: 1px dashed #a0c4e4;
@@ -297,8 +247,8 @@ button {
   color: white;
   cursor: pointer;
   transition: background-color 0.2s;
-}
-button:hover {
-  background-color: #434190;
+} 
+button:hover {  
+  background-color: #434190;    
 }
 </style>

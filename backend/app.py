@@ -24,13 +24,18 @@ jwt = JWTManager(app)
 db = SQLAlchemy(app)
 
 # --- 数据库模型 ---
+# --- 修复后的 User 模型 ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256))
-    # 1. 新增关系：一个用户只有一个草稿
-    draft = db.relationship('Draft', backref='user', uselist=False, cascade="all, delete-orphan")
+    
+    # 【关键】新增下面这一行，告诉 User 它可以拥有多个 Idea
+    ideas = db.relationship('Idea', backref='user', lazy=True)
+    
+    # 草稿的关系保持不变
+    draft = db.relationship('Draft', backref='user_draft', uselist=False, cascade="all, delete-orphan")
 
 class Idea(db.Model):
     id = db.Column(db.Integer, primary_key=True)

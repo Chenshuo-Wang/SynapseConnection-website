@@ -11,7 +11,7 @@
       
       <img v-if="idea.image_url" :src="apiBaseUrl + idea.image_url" alt="封面图片" class="cover-image"/>
       
-      <div class="content-body" v-html="renderedContent"></div>
+      <md-editor v-model="idea.content" previewOnly />
     </div>
   </div>
 </template>
@@ -20,8 +20,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import apiClient from '@/services/api';
-// (3) 导入 markdown-it
-import MarkdownIt from 'markdown-it';
+import { MdPreview } from 'md-editor-v3';
+import 'md-editor-v3/lib/preview.css';
 
 const idea = ref(null);
 const isLoading = ref(true);
@@ -29,7 +29,6 @@ const error = ref(null);
 const route = useRoute();
 const apiBaseUrl = 'http://localhost:5000'; // 后端地址
 
-const md = new MarkdownIt(); // 创建 markdown-it 实例
 
 // (4) 计算属性，用来动态渲染内容
 const renderedContent = computed(() => {
