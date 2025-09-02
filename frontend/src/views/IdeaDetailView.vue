@@ -17,42 +17,55 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+// frontend/src/views/IdeaDetailView.vue 的 <script setup> (诊断版)
+
+import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import apiClient from '@/services/api';
-import { MdPreview } from 'md-editor-v3';
-import 'md-editor-v3/lib/preview.css';
+import apiClient from '@/services/api.js';
+
+// 导入 md-editor-v3 的预览组件
+import { MdEditor } from 'md-editor-v3';
+import 'md-editor-v3/lib/style.css';
 
 const idea = ref(null);
 const isLoading = ref(true);
 const error = ref(null);
-const route = useRoute();
-const apiBaseUrl = 'http://localhost:5000'; // 后端地址
+const route = useRoute(); // 用来获取当前页面的路由信息
 
-
-// (4) 计算属性，用来动态渲染内容
-const renderedContent = computed(() => {
-  if (!idea.value || !idea.value.content) return '';
-  // 在真实项目中，这里可以根据 idea.content_type 来判断
-  // 现在我们简单地假设，如果内容包含HTML标签，就直接显示，否则用Markdown渲染
-  if (idea.value.content.includes('<p>') || idea.value.content.includes('<h1>')) {
-    return idea.value.content; // 假设是HTML，直接返回
-  }
-  return md.render(idea.value.content); // 否则，用markdown-it渲染
-});
-
+// --- 【核心】获取数据的函数 ---
 async function fetchIdeaDetail() {
+  // 1. 打印一下，看看我们是否正确拿到了URL里的ID
   const ideaId = route.params.id;
+  console.log('1. 正在为 Idea ID 获取数据:', ideaId);
+
+  // 检查 ideaId 是否有效
+  if (!ideaId) {
+    error.value = '错误：在URL中没有找到Idea ID。';
+    isLoading.value = false;
+    console.error(error.value);
+    return;
+  }
+
   try {
     const response = await apiClient.get(`/ideas/${ideaId}`);
+    
+    // 2. 打印一下，看看从后端收到了什么数据
+    console.log('2. 成功从后端收到数据:', response.data);
+    
     idea.value = response.data;
   } catch (err) {
-    error.value = '无法加载该创意。';
+    // 3. 如果请求失败，打印出详细的错误信息
+    console.error("3. 获取Idea详情时发生严重错误:", err);
+    error.value = '无法加载该创意，它可能不存在或服务器出错。请检查浏览器控制台的详细错误信息。';
   } finally {
     isLoading.value = false;
   }
 }
-onMounted(fetchIdeaDetail);
+
+// 页面加载后，立即执行上面的函数
+onMounted(() => {
+  fetchIdeaDetail();
+});
 </script>
 
 <style scoped>
