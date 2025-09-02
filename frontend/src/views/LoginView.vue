@@ -28,6 +28,7 @@ const email = ref('');
 const password = ref('');
 const router = useRouter(); // 获取router实例
 
+// frontend/src/views/LoginView.vue 内
 async function handleLogin() {
   if (!email.value || !password.value) {
     alert('邮箱和密码不能为空！');
@@ -39,13 +40,15 @@ async function handleLogin() {
       password: password.value,
     });
     
-    // 从后端响应中获取 access_token
-    const token = response.data.access_token;
-    // 将 token 存入浏览器的 localStorage
-    localStorage.setItem('token', token);
+    // 从后端响应中同时获取两种 token
+    const accessToken = response.data.access_token;
+    const refreshToken = response.data.refresh_token;
+    
+    // 将它们分别存入 localStorage
+    localStorage.setItem('access_token', accessToken);
+    localStorage.setItem('refresh_token', refreshToken);
 
     alert('登录成功！');
-    // 登录成功后，跳转到提交创意的页面
     router.push('/submit-idea');
 
   } catch (error) {

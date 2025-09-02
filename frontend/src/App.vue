@@ -20,20 +20,23 @@
 </template>
 
 <script setup>
+// frontend/src/App.vue 内
 import { ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 
-const isLoggedIn = ref(!!localStorage.getItem('token'));
+const isLoggedIn = ref(!!localStorage.getItem('access_token'));
 const router = useRouter();
 const route = useRoute();
 
-// 监听路由变化，以更新登录状态（例如，用户手动跳转页面）
 watch(route, () => {
-  isLoggedIn.value = !!localStorage.getItem('token');
+  isLoggedIn.value = !!localStorage.getItem('access_token');
 });
 
 function logout() {
-  localStorage.removeItem('token');
+  // 同时清除 access_token 和 refresh_token
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  
   isLoggedIn.value = false;
   alert('您已成功登出。');
   router.push('/login');

@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
+from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required, JWTManager
 from werkzeug.utils import secure_filename
 
 # --- 基础配置 ---
@@ -16,6 +16,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'a_database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config["JWT_SECRET_KEY"] = "your-super-secret-key-change-this"
+
+from datetime import timedelta
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -75,7 +80,15 @@ def login():
     user = User.query.filter_by(email=data['email']).first()
     if not user or not check_password_hash(user.password_hash, data['password']): return jsonify({"message": "邮箱或密码错误！"}), 401
     access_token = create_access_token(identity=user.email)
-    return jsonify(access_token=access_token), 200
+    refresh_token = create_refresh_token(identity=user.email) # 正确的函数名
+    return jsonify(access_token=access_token, refresh_token=refresh_token), 200
+
+@app.route('/api/refresh', methods=['POST'])
+@jwt_required(refresh=True) # 注意这里的 refresh=True
+def refresh():
+    current_user_email = get_jwt_identity()
+    new_access_token = create_access_token(identity=current_user_email)
+    return jsonify(access_token=new_access_token), 200
 
 @app.route('/api/upload', methods=['POST'])
 @jwt_required()
