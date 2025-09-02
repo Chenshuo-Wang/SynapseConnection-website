@@ -28,7 +28,7 @@
       <div class="form-group">
         <label>详细内容 (支持 Markdown)</label>
         <md-editor 
-          v-model="content" 
+          ref="editorRef" v-model="content" 
           language="zh-CN"
           :onUploadImg="handleEditorImageUploadV3"
           placeholder="在这里详细描述您的创意..."
@@ -55,15 +55,15 @@ import 'md-editor-v3/lib/style.css';
 
 // --- 核心逻辑 ---
 const router = useRouter();
+const editorRef = ref(null); // 【新增】创建 ref 来引用编辑器实例
 const title = ref('');
 const content = ref('');
 const uploadedImageFilename = ref(null);
 let debounceTimer = null;
 
 
-// --- 【关键】为 md-editor-v3 升级后的、带注释功能的图片上传函数 ---
-const handleEditorImageUploadV3 = async (files, callback) => {
-  // 我们先处理单张图片上传
+// --- 【关键】最终版的图片上传函数，使用 ref 插入 HTML ---
+const handleEditorImageUploadV3 = async (files) => {
   if (files.length === 0) {
     return;
   }
@@ -72,40 +72,35 @@ const handleEditorImageUploadV3 = async (files, callback) => {
   formData.append('file', file);
 
   try {
-    console.log("正在上传图片...");
     const response = await apiClient.post('/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
+    
+    const realUrl = `/uploads/${response.data.filename}`;
 
-    const realUrl = `/uploads/${response.data.filename}`; // 使用相对路径
-    console.log("图片上传成功，URL:", realUrl);
-
-    // 1. 弹出输入框，让用户输入注释
     const desc = prompt("请输入图片的注释（将显示在图片下方）：", file.name);
+    
+    if (desc === null) return;
 
-    // 2. 如果用户点击了“取消”，则不进行任何操作
-    if (desc === null) {
-      return;
-    }
-
-    // 3. 构建包含图片和注释的 HTML 代码块
-    //    我们使用内联样式(style)来确保无论在哪里显示，样式都保持一致
-    const imageHtml = `
-<figure style="text-align: center; margin: 1.5em 0;">
+    // 构建我们想要插入的、带有换行符的完整 HTML
+    const imageHtml = `\n<figure style="text-align: center; margin: 1.5em 0;">
   <img src="${realUrl}" alt="${desc}" style="max-width: 90%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
   <figcaption style="font-size: 0.9em; color: #666; margin-top: 8px; font-style: italic;">${desc}</figcaption>
-</figure>
-`;
+</figure>\n`;
     
-    // 4. 调用编辑器的回调函数，将我们构建好的 HTML 插入到编辑器中
-    callback([imageHtml]);
+    // 【核心】使用 editorRef 的 insert 方法，直接插入 HTML 文本
+    editorRef.value?.insert(() => {
+      return {
+        targetValue: imageHtml,
+        select: false, // 插入后不选中
+      };
+    });
 
   } catch (error) {
     console.error("图片上传失败:", error);
     alert('图片上传失败，请重试。');
   }
 };
-
 
 // --- 云端草稿逻辑 (保持不变) ---
 async function fetchDraft() {
