@@ -109,27 +109,20 @@ def uploaded_file(filename):
 @app.route('/api/ideas', methods=['POST'])
 @jwt_required()
 def submit_idea():
-    # 【修改开始】
-    # 1. 从 request.form 改为 request.get_json()
-    data = request.get_json()
+    # 【核心修复】改为从 request.form 中获取数据，以匹配前端的 multipart/form-data
+    title = request.form.get('title')
+    content = request.form.get('content')
+    image_filename = request.form.get('image_filename') # image_filename 也来自 form
 
-    # 2. 增加一个健壮性检查，防止前端发送空数据
-    if not data:
-        return jsonify({"message": "请求体不能为空！"}), 400
-
-    # 3. 从 data 字典中获取数据
-    title = data.get('title')
-    content = data.get('content')
-    image_filename = data.get('image_filename') # image_filename 也来自 JSON
-    # 【修改结束】
-
-    # 下面的逻辑保持不变
-    if not title or not content: 
+    if not title or not content:
         return jsonify({"message": "标题和内容不能为空！"}), 400
     
     current_user_email = get_jwt_identity()
     user = User.query.filter_by(email=current_user_email).first()
     
+    if not user: # 增加一个用户不存在的检查
+        return jsonify({"message": "用户不存在或未登录"}), 404
+
     new_idea = Idea(title=title, content=content, user_id=user.id, image_filename=image_filename)
     
     db.session.add(new_idea)
