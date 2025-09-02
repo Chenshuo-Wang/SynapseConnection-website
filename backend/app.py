@@ -96,16 +96,39 @@ def uploaded_file(filename):
 @app.route('/api/ideas', methods=['POST'])
 @jwt_required()
 def submit_idea():
-    title = request.form.get('title')
-    content = request.form.get('content')
-    image_filename = request.form.get('image_filename')
-    if not title or not content: return jsonify({"message": "标题和内容不能为空！"}), 400
+    # 【修改开始】
+    # 1. 从 request.form 改为 request.get_json()
+    data = request.get_json()
+
+    # 2. 增加一个健壮性检查，防止前端发送空数据
+    if not data:
+        return jsonify({"message": "请求体不能为空！"}), 400
+
+    # 3. 从 data 字典中获取数据
+    title = data.get('title')
+    content = data.get('content')
+    image_filename = data.get('image_filename') # image_filename 也来自 JSON
+    # 【修改结束】
+
+    # 下面的逻辑保持不变
+    if not title or not content: 
+        return jsonify({"message": "标题和内容不能为空！"}), 400
+    
     current_user_email = get_jwt_identity()
     user = User.query.filter_by(email=current_user_email).first()
+    
     new_idea = Idea(title=title, content=content, user_id=user.id, image_filename=image_filename)
+    
     db.session.add(new_idea)
+    
+    # 【关键补充】在提交 idea 成功后，删除对应的云端草稿
+    if user.draft:
+        db.session.delete(user.draft)
+
     db.session.commit()
+    
     return jsonify({"message": "Idea提交成功！"}), 201
+
 
 @app.route('/api/ideas', methods=['GET'])
 def get_ideas():
